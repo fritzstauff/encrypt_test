@@ -55,9 +55,10 @@ The decrypted file will be created with the original filename plus "_decrypted" 
 
 ## Security Notes
 
-- The password and salt can be of variable length
+- The password and salt are used to derive a 256-bit AES key
+- The implementation uses a simple key derivation function that combines the password and salt
+- The salt is also used to derive the initialization vector (IV)
 - This implementation uses AES encryption with CBC mode
-- The salt is used to derive the initialization vector (IV)
 - For production use, consider implementing a stronger key derivation function (like PBKDF2)
 - Store your password and salt securely - if you lose them, you won't be able to decrypt your files
 
@@ -78,6 +79,7 @@ This will create `C:\Documents\secret_decrypted.docx`
 ## Limitations
 
 - This is a basic implementation and may not be suitable for highly sensitive data
+- The key derivation function is very simple and not cryptographically strong
 - No password strength validation is performed
 - The same salt is used for all files, which reduces security (ideally, a random salt should be generated for each file)
 - Error handling is basic and may not provide detailed information about all failure modes 

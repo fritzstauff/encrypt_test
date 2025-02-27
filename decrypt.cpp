@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <bcrypt.h>
+#include <ntstatus.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -7,6 +8,11 @@
 #include <filesystem>
 
 #pragma comment(lib, "bcrypt.lib")
+
+// Define NT_SUCCESS macro if not already defined
+#ifndef NT_SUCCESS
+#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+#endif
 
 // Error handling helper function
 void HandleError(const std::string& message, NTSTATUS status = 0) {
@@ -20,6 +26,26 @@ void HandleError(const std::string& message, NTSTATUS status = 0) {
 // Convert a string to a vector of bytes
 std::vector<BYTE> StringToBytes(const std::string& str) {
     return std::vector<BYTE>(str.begin(), str.end());
+}
+
+// Simple key derivation function to get a fixed-size key from password and salt
+std::vector<BYTE> DeriveKey(const std::string& password, const std::string& salt, size_t keySize) {
+    // Combine password and salt
+    std::vector<BYTE> material;
+    material.insert(material.end(), password.begin(), password.end());
+    material.insert(material.end(), salt.begin(), salt.end());
+    
+    // Create a key of the desired size
+    // For real applications, use a proper key derivation function like PBKDF2
+    std::vector<BYTE> derivedKey(keySize, 0);
+    
+    // Simple key stretching - just repeat the material until we fill the key
+    // This is NOT secure for production use!
+    for (size_t i = 0; i < keySize; i++) {
+        derivedKey[i] = material[i % material.size()];
+    }
+    
+    return derivedKey;
 }
 
 // Function to decrypt a file using BCrypt
@@ -71,9 +97,6 @@ bool DecryptFile(const std::string& inputFilePath, const std::string& password, 
                                     std::istreambuf_iterator<char>());
     inFile.close();
     
-    // Convert password to byte array
-    std::vector<BYTE> passwordBytes = StringToBytes(password);
-    
     // BCrypt variables
     BCRYPT_ALG_HANDLE hAlg = NULL;
     BCRYPT_KEY_HANDLE hKey = NULL;
@@ -116,9 +139,12 @@ bool DecryptFile(const std::string& inputFilePath, const std::string& password, 
         return false;
     }
     
-    // Create a key from the password
+    // Create a key from the password and salt
+    // Using a 256-bit (32 byte) key for AES-256
+    std::vector<BYTE> keyBytes = DeriveKey(password, salt, 32);
+    
     status = BCryptGenerateSymmetricKey(hAlg, &hKey, pbKeyObject, cbKeyObject,
-                                       (PBYTE)passwordBytes.data(), (ULONG)passwordBytes.size(), 0);
+                                       keyBytes.data(), (ULONG)keyBytes.size(), 0);
     if (!NT_SUCCESS(status)) {
         HandleError("BCryptGenerateSymmetricKey failed", status);
         HeapFree(GetProcessHeap(), 0, pbKeyObject);
